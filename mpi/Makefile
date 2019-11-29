@@ -6,7 +6,7 @@ CONV=-DTEST_CONV
 all: jacobi
 
 jacobi: jacobi_mpi.c utils.c
-	$(CC) $(CFLAGS) $(RES) $(CONV) jacobi_mpi.c utils.c -o jacobi
+	$(CC) $(CFLAGS) $(RES) -g jacobi_mpi.c utils.c -o jacobi
 
 
 clean:

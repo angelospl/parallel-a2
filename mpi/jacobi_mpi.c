@@ -9,7 +9,7 @@ int main(int argc, char ** argv) {
     int rank,size;
     int global[2],local[2]; //global matrix dimensions and local matrix dimensions (2D-domain, 2D-subdomain)
     int global_padded[2];   //padded global matrix dimensions (if padding is not needed, global_padded=global)
-    int grid[2];            //processor grid dimensions
+    int grid[2],pad[2];            //processor grid dimensions
     int i,j,t;
     int global_converged=0,converged=0; //flags for convergence, global and per process
     MPI_Datatype dummy;     //dummy datatype used to align user-defined datatypes in memory
@@ -56,10 +56,12 @@ int main(int argc, char ** argv) {
         if (global[i]%grid[i]==0) {
             local[i]=global[i]/grid[i];
             global_padded[i]=global[i];
+            pad[i]=0;
         }
         else {
             local[i]=(global[i]/grid[i])+1;
             global_padded[i]=local[i]*grid[i];
+            pad[i]=global_padded[i]-global[i];
         }
     }
 
@@ -111,128 +113,190 @@ int main(int argc, char ** argv) {
 
     //----Rank 0 scatters the global matrix----//
     MPI_Scatterv (&U[0][0],scattercounts,scatteroffset,global_block,&u_previous[1][1],1,local_block,0,CART_COMM);
-
-    //----Rank 0 scatters the global matrix----//
-      if (rank==1)
-      {printf("Eimai o rank %d %d\n",rank_grid[0],rank_grid[1]);
-      print2d(u_previous,local[0]+2,local[1]+2);}
-
-	//*************TODO*******************//
-
-
-
-	/*Fill your code here*/
-
-
-
-	/*Make sure u_current and u_previous are
-		both initialized*/
-
-
-
-
-
-
-
-     //************************************//
-
-
-    if (rank==0)
-        free2d(U);
-
-
-
+    printf("Eimai o rank %d %d\n",rank_grid[0],rank_grid[1]);
+    print2d(u_previous,local[0]+2,local[1]+2);
+    if (rank==0) free2d(U);
 	//----Define datatypes or allocate buffers for message passing----//
-
 	//*************TODO*******************//
+	MPI_Datatype local_column;
+  MPI_Type_vector(local[0],1,local[1]+2,MPI_DOUBLE,&dummy);
+  MPI_Type_create_resized(dummy,0,sizeof(double),&local_column);
+  MPI_Type_commit(&local_column);
 
-
-
-	/*Fill your code here*/
-
-
-
-
-
-
-
-
+  MPI_Datatype local_row;
+  MPI_Type_contiguous(local[1],MPI_DOUBLE,&dummy);
+  MPI_Type_create_resized(dummy,0,sizeof(double),&local_row);
+  MPI_Type_commit(&local_row);
 	//************************************//
 
 
     //----Find the 4 neighbors with which a process exchanges messages----//
-
-	//*************TODO*******************//
-    int north, south, east, west;
-
-
-
-	/*Fill your code here*/
-
-
-	/*Make sure you handle non-existing
-		neighbors appropriately*/
-
-
-
-
-
-	//************************************//
-
-
-
     //---Define the iteration ranges per process-----//
 	//*************TODO*******************//
-
+    int top, bot,left,right;
     int i_min,i_max,j_min,j_max;
-
-
-
-	/*Fill your code here*/
-
-
-
-
-
+    int bot_i_min,bot_j_min,top_i_min,top_j_min,lt_i_min,lt_j_min,rt_i_min,rt_j_min;
+    top=-1;
+    bot=-1;
+    left=-1;
+    right=-1;
+    if (rank_grid[0]==0 && rank_grid[1]==0) {     //  process upper left corner
+      right=1;
+      bot=1;
+      i_min=2;
+      j_min=2;
+      i_max=local[0];
+      j_max=local[1];
+      rt_i_min=1;
+      rt_j_min=local[1];
+      bot_i_min=local[0];
+      bot_j_min=1;
+    }
+    else if (rank_grid[0]==0 && rank_grid[1]==(grid[1]-1)) {  //process upper right corner
+      left=1;
+      bot=1;
+      i_min=2;
+      j_min=1;
+      i_max=local[0];
+      j_max=local[1]-1-pad[1];
+      lt_i_min=1;
+      lt_j_min=1;
+      bot_i_min=i_max;
+      bot_j_min=1;
+    }
+    else if (rank_grid[0]==(grid[0]-1) && rank_grid[1]==0) {  //process bottom left corner
+      top=1;
+      right=1;
+      i_min=1;
+      j_min=2;
+      i_max=local[0]-1-pad[0];
+      j_max=local[1];
+      top_i_min=1;
+      top_j_min=1;
+      rt_i_min=1;
+      rt_j_min=local[1];
+    }
+    else if (rank_grid[0]==(grid[0]-1) && rank_grid[1]==(grid[1]-1)) {  //process bottom right corner
+      top=1;
+      left=1;
+      i_min=1;
+      j_min=1;
+      i_max=local[0]-1-pad[0];
+      j_max=local[1]-1-pad[1];
+      top_i_min=1;
+      top_j_min=1;
+      lt_i_min=1;
+      lt_j_min=1;
+    }
+    else if (rank_grid[1]==0) { //process first column
+      right=1;
+      top=1;
+      bot=1;
+      i_min=1;
+      j_min=2;
+      i_max=local[0];
+      j_max=local[1];
+      top_i_min=top_j_min=1;
+      rt_i_min=1;
+      rt_j_min=local[1];
+      bot_i_min=local[0];
+      bot_j_min=1;
+    }
+    else if (rank_grid[1]==(grid[1]-1)) { //process last column
+      left=1;
+      top=1;
+      bot=1;
+      i_min=1;
+      j_min=1;
+      i_max=local[0];
+      j_max=local[1]-1-pad[1];
+      top_i_min=top_j_min=lt_i_min=lt_j_min=1;
+      bot_i_min=local[0];
+      bot_j_min=1;
+    }
+    else if (rank_grid[0]==0) { //  process first row
+      bot=1;
+      left=1;
+      right=1;
+      i_min=2;
+      j_min=1;
+      i_max=local[0];
+      j_max=local[1];
+      bot_i_min=local[0];
+      bot_j_min=1;
+      rt_i_min=1;
+      rt_j_min=local[1];
+      lt_i_min=lt_j_min=1;
+    }
+    else if (rank_grid[0]==grid[0]-1) { // process last row
+      top=1;
+      left=1;
+      right=1;
+      i_min=1;
+      j_min=1;
+      i_max=local[0]-1-pad[0];
+      j_max=local[1];
+      top_i_min=top_j_min=lt_i_min=lt_j_min=1;
+      rt_i_min=1;
+      rt_j_min=local[1];
+    }
+    else {  // process in the middle
+      top=1;
+      bot=1;
+      right=1;
+      left=1;
+      i_min=j_min=1;
+      i_max=local[0];
+      j_max=local[1];
+      top_i_min=top_j_min=lt_i_min=lt_j_min=1;
+      bot_i_min=local[0];
+      bot_j_min=1;
+      rt_i_min=1;
+      rt_j_min=local[1];
+    }
+    printf("Eimai o rank %d %d me i_min %d i_max %d j_min %d j_max %d\n",rank_grid[0],rank_grid[1],i_min,i_max,j_min,j_max);
+	/*Make sure you handle non-existing
+		neighbors appropriately*/
+	//************************************//
 	/*Three types of ranges:
 		-internal processes
 		-boundary processes
 		-boundary processes and padded global array
 	*/
-
-
-
-
-
 	//************************************//
-
-
-
-
  	//----Computational core----//
 	gettimeofday(&tts, NULL);
     #ifdef TEST_CONV
-    for (t=0;t<T && !global_converged;t++) {
+    for (t=0;t<1 && !global_converged;t++) {
     #endif
     #ifndef TEST_CONV
     #undef T
-    #define T 256
+    #define T 1
     for (t=0;t<T;t++) {
     #endif
-
-
 	 	//*************TODO*******************//
+    MPI_Status status;
+    if (top!=-1) {
+      MPI_Send(&u_previous[top_i_min][top_j_min],1,local_row,(rank_grid[0]-top)*grid[1]+rank_grid[1],10,MPI_COMM_WORLD);
+      //MPI_Recv(&u_previous[top_i_min-1][top_j_min],1,local_row,(rank_grid[0]-top)*grid[1]+rank_grid[1],10,MPI_COMM_WORLD,&status);
+      printf("Eimai o rank %d %d kai kanw send top\n",rank_grid[0],rank_grid[1] );
+    }
+    if (bot!=-1) {
+      MPI_Send(&u_previous[bot_i_min][bot_j_min],1,local_row,(rank_grid[0]+bot)*grid[1]+rank_grid[1],20,MPI_COMM_WORLD);
+      printf("Eimai o rank %d %d kai kanw send bot\n",rank_grid[0],rank_grid[1] );
+    }
+    if (right!=-1) {
+      MPI_Send(&u_previous[rt_i_min][rt_j_min],1,local_column,rank_grid[0]*grid[1]+rank_grid[1]+right,30,MPI_COMM_WORLD);
+      printf("Eimai o rank %d %d kai kanw send right\n",rank_grid[0],rank_grid[1] );
 
+    }
+    if (left!=-1) {
+      MPI_Send(&u_previous[lt_i_min][lt_j_min],1,local_column,rank_grid[0]*grid[1]+rank_grid[1]-left,40,MPI_COMM_WORLD);
+      printf("Eimai o rank %d %d kai kanw send left\n",rank_grid[0],rank_grid[1] );
 
-
-
-
-
-		/*Fill your code here*/
-
-
+    }
 		/*Compute and Communicate*/
-
+    if (rank==2) print2d(u_previous,local[0]+2,local[1]+2);
 		/*Add appropriate timers for computation*/
 
 
