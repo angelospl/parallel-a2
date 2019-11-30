@@ -112,9 +112,9 @@ int main(int argc, char ** argv) {
     }
 
     //----Rank 0 scatters the global matrix----//
-    MPI_Scatterv (&U[0][0],scattercounts,scatteroffset,global_block,&u_previous[1][1],1,local_block,0,CART_COMM);
-    printf("Eimai o rank %d %d\n",rank_grid[0],rank_grid[1]);
-    print2d(u_previous,local[0]+2,local[1]+2);
+    MPI_Scatterv (&U[0][0],scattercounts,scatteroffset,global_block,&u_current[1][1],1,local_block,0,CART_COMM);
+    //printf("Eimai o rank %d %d\n",rank_grid[0],rank_grid[1]);
+    //print2d(u_previous,local[0]+2,local[1]+2);
     if (rank==0) free2d(U);
 	//----Define datatypes or allocate buffers for message passing----//
 	//*************TODO*******************//
@@ -136,6 +136,7 @@ int main(int argc, char ** argv) {
     int top, bot,left,right;
     int i_min,i_max,j_min,j_max;
     int bot_i_min,bot_j_min,top_i_min,top_j_min,lt_i_min,lt_j_min,rt_i_min,rt_j_min;
+    bot_i_min=bot_j_min=top_i_min=top_j_min=lt_i_min=lt_j_min=rt_i_min=rt_j_min=-1;
     top=-1;
     bot=-1;
     left=-1;
@@ -254,7 +255,7 @@ int main(int argc, char ** argv) {
       rt_i_min=1;
       rt_j_min=local[1];
     }
-    printf("Eimai o rank %d %d me i_min %d i_max %d j_min %d j_max %d\n",rank_grid[0],rank_grid[1],i_min,i_max,j_min,j_max);
+    //printf("Eimai o rank %d %d me i_min %d i_max %d j_min %d j_max %d\n",rank_grid[0],rank_grid[1],i_min,i_max,j_min,j_max);
 	/*Make sure you handle non-existing
 		neighbors appropriately*/
 	//************************************//
@@ -265,67 +266,49 @@ int main(int argc, char ** argv) {
 	*/
 	//************************************//
  	//----Computational core----//
-	gettimeofday(&tts, NULL);
-    #ifdef TEST_CONV
-    for (t=0;t<1 && !global_converged;t++) {
-    #endif
-    #ifndef TEST_CONV
-    #undef T
-    #define T 1
-    for (t=0;t<T;t++) {
-    #endif
+  for (i = 0; i < local[0]+2; i++) {
+    for (j = 0; j < local[1]+2; j++) {
+      u_previous[i][j]=u_current[i][j];
+    }
+  }
+  gettimeofday(&tts, NULL);
+  MPI_Status status;
+  for (t=0;t<1;t++) {
 	 	//*************TODO*******************//
-    MPI_Status status;
+    swap=u_previous;
+    u_previous=u_current;
+    u_current=swap;
+    if (bot==1) {
+      //printf("Eimai o rank %d %d kai kanw send bot. Stelnw ston %d. xekinaw apo %d %d\n",rank_grid[0],rank_grid[1],(rank_grid[0]+1)*grid[1]+rank_grid[1],bot_i_min,bot_j_min );
+      MPI_Send(&u_previous[bot_i_min][bot_j_min],1,local_row,(rank_grid[0]+1)*grid[1]+rank_grid[1],20,MPI_COMM_WORLD);
+      MPI_Recv(&u_previous[bot_i_min+1][bot_j_min],1,local_row,(rank_grid[0]+1)*grid[1]+rank_grid[1],10,MPI_COMM_WORLD,&status);
+    }
+    if (right==1) {
+      //printf("Eimai o rank %d %d kai kanw send right. Stelnw ston %d. xekinaw apo %d %d\n",rank_grid[0],rank_grid[1],(rank_grid[0])*grid[1]+rank_grid[1]+1,rt_i_min,rt_j_min );
+      MPI_Send(&u_previous[rt_i_min][rt_j_min],1,local_column,rank_grid[0]*grid[1]+rank_grid[1]+1,30,MPI_COMM_WORLD);
+      MPI_Recv(&u_previous[rt_i_min][rt_j_min+1],1,local_column,(rank_grid[0])*grid[1]+rank_grid[1]+1,40,MPI_COMM_WORLD,&status);
+    }
     if (top!=-1) {
-      MPI_Send(&u_previous[top_i_min][top_j_min],1,local_row,(rank_grid[0]-top)*grid[1]+rank_grid[1],10,MPI_COMM_WORLD);
-      //MPI_Recv(&u_previous[top_i_min-1][top_j_min],1,local_row,(rank_grid[0]-top)*grid[1]+rank_grid[1],10,MPI_COMM_WORLD,&status);
-      printf("Eimai o rank %d %d kai kanw send top\n",rank_grid[0],rank_grid[1] );
-    }
-    if (bot!=-1) {
-      MPI_Send(&u_previous[bot_i_min][bot_j_min],1,local_row,(rank_grid[0]+bot)*grid[1]+rank_grid[1],20,MPI_COMM_WORLD);
-      printf("Eimai o rank %d %d kai kanw send bot\n",rank_grid[0],rank_grid[1] );
-    }
-    if (right!=-1) {
-      MPI_Send(&u_previous[rt_i_min][rt_j_min],1,local_column,rank_grid[0]*grid[1]+rank_grid[1]+right,30,MPI_COMM_WORLD);
-      printf("Eimai o rank %d %d kai kanw send right\n",rank_grid[0],rank_grid[1] );
-
+      //printf("Eimai o rank %d %d kai kanw send top. Stelnw ston %d. xekinaw apo %d %d\n",rank_grid[0],rank_grid[1],(rank_grid[0]-1)*grid[1]+rank_grid[1],top_i_min,top_j_min );
+      MPI_Send(&u_previous[top_i_min][top_j_min],1,local_row,(rank_grid[0]-1)*grid[1]+rank_grid[1],10,MPI_COMM_WORLD);
+      MPI_Recv(&u_previous[top_i_min-1][top_j_min],1,local_row,(rank_grid[0]-top)*grid[1]+rank_grid[1],20,MPI_COMM_WORLD,&status);
     }
     if (left!=-1) {
-      MPI_Send(&u_previous[lt_i_min][lt_j_min],1,local_column,rank_grid[0]*grid[1]+rank_grid[1]-left,40,MPI_COMM_WORLD);
-      printf("Eimai o rank %d %d kai kanw send left\n",rank_grid[0],rank_grid[1] );
-
+      //printf("Eimai o rank %d %d kai kanw send left\n",rank_grid[0],rank_grid[1] );
+      MPI_Send(&u_previous[lt_i_min][lt_j_min],1,local_column,rank_grid[0]*grid[1]+rank_grid[1]-1,40,MPI_COMM_WORLD);
+      MPI_Recv(&u_previous[lt_i_min][lt_j_min-1],1,local_column,(rank_grid[0])*grid[1]+rank_grid[1]-1,30,MPI_COMM_WORLD,&status);
     }
+    //MPI_Barrier(MPI_COMM_WORLD);
 		/*Compute and Communicate*/
-    if (rank==2) print2d(u_previous,local[0]+2,local[1]+2);
+      // for (i=i_min;i<=i_max;i++)
+      //   for (j=j_min;j<=j_max;j++)
+      //     u_current[i][j]=(u_previous[i-1][j]+u_previous[i+1][j]+u_previous[i][j-1]+u_previous[i][j+1])/4.0;
+    //print2d(u_current,local[0]+2,local[1]+2);
+    MPI_Barrier(MPI_COMM_WORLD);
+    //if (rank==2) print2d(u_previous,local[0]+2,local[1]+2);
 		/*Add appropriate timers for computation*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-		#ifdef TEST_CONV
-        if (t%C==0) {
-			//*************TODO**************//
+		   //*************TODO**************//
 			/*Test convergence*/
-
-
-		}
-		#endif
 
 
 		//************************************//
@@ -333,20 +316,20 @@ int main(int argc, char ** argv) {
 
 
     }
-    gettimeofday(&ttf,NULL);
-
-    ttotal=(ttf.tv_sec-tts.tv_sec)+(ttf.tv_usec-tts.tv_usec)*0.000001;
-
-    MPI_Reduce(&ttotal,&total_time,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
-    MPI_Reduce(&tcomp,&comp_time,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
+    // gettimeofday(&ttf,NULL);
+    //
+    // ttotal=(ttf.tv_sec-tts.tv_sec)+(ttf.tv_usec-tts.tv_usec)*0.000001;
+    //
+    // MPI_Reduce(&ttotal,&total_time,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
+    // MPI_Reduce(&tcomp,&comp_time,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
 
 
 
     //----Rank 0 gathers local matrices back to the global matrix----//
 
-    if (rank==0) {
-            U=allocate2d(global_padded[0],global_padded[1]);
-    }
+    // if (rank==0) {
+    //         U=allocate2d(global_padded[0],global_padded[1]);
+    // }
 
 
 	//*************TODO*******************//
@@ -373,17 +356,17 @@ int main(int argc, char ** argv) {
 	//----Printing results----//
 
 	//**************TODO: Change "Jacobi" to "GaussSeidelSOR" or "RedBlackSOR" for appropriate printing****************//
-    if (rank==0) {
-        printf("Jacobi X %d Y %d Px %d Py %d Iter %d ComputationTime %lf TotalTime %lf midpoint %lf\n",global[0],global[1],grid[0],grid[1],t,comp_time,total_time,U[global[0]/2][global[1]/2]);
-
-        #ifdef PRINT_RESULTS
-        char * s=malloc(50*sizeof(char));
-        sprintf(s,"resJacobiMPI_%dx%d_%dx%d",global[0],global[1],grid[0],grid[1]);
-        fprint2d(s,U,global[0],global[1]);
-        free(s);
-        #endif
-
-    }
+    // if (rank==0) {
+    //     printf("Jacobi X %d Y %d Px %d Py %d Iter %d ComputationTime %lf TotalTime %lf midpoint %lf\n",global[0],global[1],grid[0],grid[1],t,comp_time,total_time,U[global[0]/2][global[1]/2]);
+    //
+    //     #ifdef PRINT_RESULTS
+    //     char * s=malloc(50*sizeof(char));
+    //     sprintf(s,"resJacobiMPI_%dx%d_%dx%d",global[0],global[1],grid[0],grid[1]);
+    //     fprint2d(s,U,global[0],global[1]);
+    //     free(s);
+    //     #endif
+    //
+    // }
     MPI_Finalize();
     return 0;
 }
