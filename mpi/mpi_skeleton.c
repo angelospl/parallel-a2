@@ -17,9 +17,8 @@ int main(int argc, char ** argv) {
 
     struct timeval tts,ttf,tcs,tcf;   //Timers: total-> tts,ttf, computation -> tcs,tcf
     double ttotal=0,tcomp=0,total_time,comp_time;
-    
     double ** U, ** u_current, ** u_previous, ** swap; //Global matrix, local current and previous matrices, pointer to swap between current and previous
-    
+
 
     MPI_Init(&argc,&argv);
     MPI_Comm_size(MPI_COMM_WORLD,&size);
@@ -44,14 +43,14 @@ int main(int argc, char ** argv) {
     MPI_Comm CART_COMM;         //CART_COMM: the new 2D-cartesian communicator
     int periods[2]={0,0};       //periods={0,0}: the 2D-grid is non-periodic
     int rank_grid[2];           //rank_grid: the position of each process on the new communicator
-		
+
     MPI_Cart_create(MPI_COMM_WORLD,2,grid,periods,0,&CART_COMM);    //communicator creation
     MPI_Cart_coords(CART_COMM,rank,2,rank_grid);	                //rank mapping on the new communicator
 
     //----Compute local 2D-subdomain dimensions----//
     //----Test if the 2D-domain can be equally distributed to all processes----//
     //----If not, pad 2D-domain----//
-    
+
     for (i=0;i<2;i++) {
         if (global[i]%grid[i]==0) {
             local[i]=global[i]/grid[i];
@@ -69,7 +68,7 @@ int main(int argc, char ** argv) {
     //----Allocate global 2D-domain and initialize boundary values----//
     //----Rank 0 holds the global 2D-domain----//
     if (rank==0) {
-        U=allocate2d(global_padded[0],global_padded[1]);   
+        U=allocate2d(global_padded[0],global_padded[1]);
         init2d(U,global[0],global[1]);
     }
 
@@ -77,13 +76,13 @@ int main(int argc, char ** argv) {
     //----Add a row/column on each size for ghost cells----//
 
     u_previous=allocate2d(local[0]+2,local[1]+2);
-    u_current=allocate2d(local[0]+2,local[1]+2);   
-       
+    u_current=allocate2d(local[0]+2,local[1]+2);
+
     //----Distribute global 2D-domain from rank 0 to all processes----//
-         
+
  	//----Appropriate datatypes are defined here----//
 	/*****The usage of datatypes is optional*****/
-    
+
     //----Datatype definition for the 2D-subdomain on the global matrix----//
 
     MPI_Datatype global_block;
@@ -112,7 +111,7 @@ int main(int argc, char ** argv) {
 
 
     //----Rank 0 scatters the global matrix----//
-    
+
     //----Rank 0 scatters the global matrix----//
 
 	//*************TODO*******************//
@@ -138,8 +137,8 @@ int main(int argc, char ** argv) {
     if (rank==0)
         free2d(U);
 
- 
-     
+
+
 	//----Define datatypes or allocate buffers for message passing----//
 
 	//*************TODO*******************//
@@ -207,7 +206,7 @@ int main(int argc, char ** argv) {
 
 
 
- 	//----Computational core----//   
+ 	//----Computational core----//
 	gettimeofday(&tts, NULL);
     #ifdef TEST_CONV
     for (t=0;t<T && !global_converged;t++) {
@@ -220,8 +219,8 @@ int main(int argc, char ** argv) {
 
 
 	 	//*************TODO*******************//
-     
- 
+
+
 
 
 
@@ -232,9 +231,9 @@ int main(int argc, char ** argv) {
 		/*Compute and Communicate*/
 
 		/*Add appropriate timers for computation*/
-	
 
-		
+
+
 
 
 
@@ -258,14 +257,14 @@ int main(int argc, char ** argv) {
 			/*Test convergence*/
 
 
-		}		
+		}
 		#endif
 
 
 		//************************************//
- 
-         
-        
+
+
+
     }
     gettimeofday(&ttf,NULL);
 
@@ -277,7 +276,7 @@ int main(int argc, char ** argv) {
 
 
     //----Rank 0 gathers local matrices back to the global matrix----//
-   
+
     if (rank==0) {
             U=allocate2d(global_padded[0],global_padded[1]);
     }
@@ -301,15 +300,15 @@ int main(int argc, char ** argv) {
      //************************************//
 
 
-	
-   
+
+
 
 	//----Printing results----//
 
 	//**************TODO: Change "Jacobi" to "GaussSeidelSOR" or "RedBlackSOR" for appropriate printing****************//
     if (rank==0) {
         printf("Jacobi X %d Y %d Px %d Py %d Iter %d ComputationTime %lf TotalTime %lf midpoint %lf\n",global[0],global[1],grid[0],grid[1],t,comp_time,total_time,U[global[0]/2][global[1]/2]);
-	
+
         #ifdef PRINT_RESULTS
         char * s=malloc(50*sizeof(char));
         sprintf(s,"resJacobiMPI_%dx%d_%dx%d",global[0],global[1],grid[0],grid[1]);
