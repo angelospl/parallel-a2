@@ -9,8 +9,8 @@ double max(double a, double b) {
 
 int converge(double ** u_previous, double ** u_current, int X, int Y) {
 	int i,j;
-	for (i=0;i<X;i++)
-		for (j=0;j<Y;j++)
+	for (i=1;i<=X;i++)
+		for (j=1;j<=Y;j++)
 			if (fabs(u_current[i][j]-u_previous[i][j])>e) return 0;
 	return 1;
 }
@@ -20,7 +20,7 @@ double ** allocate2d ( int dimX, int dimY ) {
 	double ** array, * tmp;
 	int i;
 	tmp = ( double * )calloc( dimX * dimY, sizeof( double ) );
-	array = ( double ** )calloc( dimX, sizeof( double * ) );	
+	array = ( double ** )calloc( dimX, sizeof( double * ) );
 	for ( i = 0 ; i < dimX ; i++ )
 		array[i] = tmp + i * dimY;
 	if ( array == NULL || tmp == NULL) {
@@ -45,14 +45,14 @@ void free2d( double ** array) {
 void init2d ( double ** array, int dimX, int dimY ) {
 	int i,j;
 	for ( i = 0 ; i < dimX ; i++ )
-		for ( j = 0; j < dimY ; j++) 
+		for ( j = 0; j < dimY ; j++)
 			array[i][j]=(i==0 || i==dimX-1 || j==0 || j==dimY-1)?0.01*(i+1)+0.001*(j+1):0.0;
 }
 
 void zero2d ( double ** array, int dimX, int dimY ) {
 	int i,j;
 	for ( i = 0 ; i < dimX ; i++ )
-		for ( j = 0; j < dimY ; j++) 
+		for ( j = 0; j < dimY ; j++)
 			array[i][j] = 0.0;
 }
 

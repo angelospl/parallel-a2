@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include "mpi.h"
 #include "utils.h"
+#define CONV 5
 
 int main(int argc, char ** argv) {
     int rank,size;
@@ -112,7 +113,7 @@ int main(int argc, char ** argv) {
     }
 
     //----Rank 0 scatters the global matrix----//
-    MPI_Scatterv (&U[0][0],scattercounts,scatteroffset,global_block,&u_current[1][1],1,local_block,0,CART_COMM);
+    MPI_Scatterv (&U[0][0],scattercounts,scatteroffset,global_block,&u_previous[1][1],1,local_block,0,CART_COMM);
     //printf("Eimai o rank %d %d\n",rank_grid[0],rank_grid[1]);
     //print2d(u_previous,local[0]+2,local[1]+2);
     if (rank==0) free2d(U);
@@ -268,12 +269,15 @@ int main(int argc, char ** argv) {
  	//----Computational core----//
   for (i = 0; i < local[0]+2; i++) {
     for (j = 0; j < local[1]+2; j++) {
-      u_previous[i][j]=u_current[i][j];
+      u_current[i][j]=u_previous[i][j];
     }
   }
+  printf("Eimai o node %d %d me j_min %d me j_max %d\n",rank_grid[0],rank_grid[1],j_min,j_max);
+  //MPI_Barrier(MPI_COMM_WORLD);
   gettimeofday(&tts, NULL);
   MPI_Status status;
-  for (t=0;t<1;t++) {
+  converged=0;
+  for (t=0;t<256 && !global_converged;t++) {
 	 	//*************TODO*******************//
     swap=u_previous;
     u_previous=u_current;
@@ -284,12 +288,12 @@ int main(int argc, char ** argv) {
       MPI_Recv(&u_previous[bot_i_min+1][bot_j_min],1,local_row,(rank_grid[0]+1)*grid[1]+rank_grid[1],10,MPI_COMM_WORLD,&status);
     }
     if (right==1) {
-      //printf("Eimai o rank %d %d kai kanw send right. Stelnw ston %d. xekinaw apo %d %d\n",rank_grid[0],rank_grid[1],(rank_grid[0])*grid[1]+rank_grid[1]+1,rt_i_min,rt_j_min );
+      // printf("Eimai o rank %d %d kai kanw send right. Stelnw ston %d. xekinaw apo %d %d\n",rank_grid[0],rank_grid[1],(rank_grid[0])*grid[1]+rank_grid[1]+1,rt_i_min,rt_j_min );
       MPI_Send(&u_previous[rt_i_min][rt_j_min],1,local_column,rank_grid[0]*grid[1]+rank_grid[1]+1,30,MPI_COMM_WORLD);
       MPI_Recv(&u_previous[rt_i_min][rt_j_min+1],1,local_column,(rank_grid[0])*grid[1]+rank_grid[1]+1,40,MPI_COMM_WORLD,&status);
     }
     if (top!=-1) {
-      //printf("Eimai o rank %d %d kai kanw send top. Stelnw ston %d. xekinaw apo %d %d\n",rank_grid[0],rank_grid[1],(rank_grid[0]-1)*grid[1]+rank_grid[1],top_i_min,top_j_min );
+      // printf("Eimai o rank %d %d kai kanw send top. Stelnw ston %d. xekinaw apo %d %d\n",rank_grid[0],rank_grid[1],(rank_grid[0]-1)*grid[1]+rank_grid[1],top_i_min,top_j_min );
       MPI_Send(&u_previous[top_i_min][top_j_min],1,local_row,(rank_grid[0]-1)*grid[1]+rank_grid[1],10,MPI_COMM_WORLD);
       MPI_Recv(&u_previous[top_i_min-1][top_j_min],1,local_row,(rank_grid[0]-top)*grid[1]+rank_grid[1],20,MPI_COMM_WORLD,&status);
     }
@@ -299,23 +303,30 @@ int main(int argc, char ** argv) {
       MPI_Recv(&u_previous[lt_i_min][lt_j_min-1],1,local_column,(rank_grid[0])*grid[1]+rank_grid[1]-1,30,MPI_COMM_WORLD,&status);
     }
     //MPI_Barrier(MPI_COMM_WORLD);
+    //print2d(u_previous,local[0]+2,local[1]+2);
 		/*Compute and Communicate*/
-      // for (i=i_min;i<=i_max;i++)
-      //   for (j=j_min;j<=j_max;j++)
-      //     u_current[i][j]=(u_previous[i-1][j]+u_previous[i+1][j]+u_previous[i][j-1]+u_previous[i][j+1])/4.0;
-    //print2d(u_current,local[0]+2,local[1]+2);
-    MPI_Barrier(MPI_COMM_WORLD);
-    //if (rank==2) print2d(u_previous,local[0]+2,local[1]+2);
-		/*Add appropriate timers for computation*/
-		   //*************TODO**************//
-			/*Test convergence*/
-
-
-		//************************************//
-
-
-
+    for (j=j_min;j<=j_max;j++) {
+      for (i=i_min;i<=i_max;i++) {
+          u_current[i][j]=(u_previous[i-1][j]+u_previous[i+1][j]+u_previous[i][j-1]+u_previous[i][j+1])/4.0;
+      }
     }
+    MPI_Barrier(MPI_COMM_WORLD);
+		/*Add appropriate timers for computation*/
+    #ifdef TEST_CONV
+        if (t%CONV==0) {
+          converged=converge(u_previous,u_current,local[0],local[1]); //converge from 1 1 to local[0] local[1]
+          MPI_Allreduce(&converged,&global_converged,1,MPI_INT,MPI_PROD,MPI_COMM_WORLD);
+		}
+		#endif
+		//************************************//
+  } //for time
+  MPI_Barrier(MPI_COMM_WORLD);
+  // for (i = 0; i < local[0]+2; i++) {
+  //   for (j = 0; j<local[1]+2; j++) {
+  //     printf("%lf",u_current[i][j]);
+  //   }
+  //   printf("\n");
+  // }
     // gettimeofday(&ttf,NULL);
     //
     // ttotal=(ttf.tv_sec-tts.tv_sec)+(ttf.tv_usec-tts.tv_usec)*0.000001;
@@ -333,19 +344,7 @@ int main(int argc, char ** argv) {
 
 
 	//*************TODO*******************//
-
-
-
-	/*Fill your code here*/
-
-
-
-
-
-
-
-
-
+  //MPI_Gatherv(&u_current[1][1],1,local_block,&U[0][0],scattercounts,scatteroffset,global_block,0,CART_COMM);
 
      //************************************//
 
