@@ -4,7 +4,6 @@
 #include <sys/time.h>
 #include "mpi.h"
 #include "utils.h"
-#define CONV 5
 
 int main(int argc, char ** argv) {
     int rank,size;
@@ -25,7 +24,6 @@ int main(int argc, char ** argv) {
     MPI_Init(&argc,&argv);
     MPI_Comm_size(MPI_COMM_WORLD,&size);
     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-    printf("%d\n",size);
 
     //----Read 2D-domain dimensions and process grid dimensions from stdin----//
 
@@ -74,7 +72,7 @@ int main(int argc, char ** argv) {
     if (rank==0) {
         U=allocate2d(global_padded[0],global_padded[1]);
         init2d(U,global[0],global[1]);
-        print2d(U,global[0],global[1]);
+        //print2d(U,global[0],global[1]);
     }
     //----Allocate local 2D-subdomains u_current, u_previous----//
     //----Add a row/column on each size for ghost cells----//
@@ -272,12 +270,10 @@ int main(int argc, char ** argv) {
       u_current[i][j]=u_previous[i][j];
     }
   }
-  printf("Eimai o node %d %d me j_min %d me j_max %d\n",rank_grid[0],rank_grid[1],j_min,j_max);
-  //MPI_Barrier(MPI_COMM_WORLD);
   gettimeofday(&tts, NULL);
   MPI_Status status;
   converged=0;
-  for (t=0;t<256 && !global_converged;t++) {
+  for (t=0;t<T && !global_converged;t++) {
 	 	//*************TODO*******************//
     swap=u_previous;
     u_previous=u_current;
@@ -303,7 +299,6 @@ int main(int argc, char ** argv) {
       MPI_Recv(&u_previous[lt_i_min][lt_j_min-1],1,local_column,(rank_grid[0])*grid[1]+rank_grid[1]-1,30,MPI_COMM_WORLD,&status);
     }
     //MPI_Barrier(MPI_COMM_WORLD);
-    //print2d(u_previous,local[0]+2,local[1]+2);
 		/*Compute and Communicate*/
     for (j=j_min;j<=j_max;j++) {
       for (i=i_min;i<=i_max;i++) {
@@ -313,7 +308,7 @@ int main(int argc, char ** argv) {
     MPI_Barrier(MPI_COMM_WORLD);
 		/*Add appropriate timers for computation*/
     #ifdef TEST_CONV
-        if (t%CONV==0) {
+        if (t%C==0) {
           converged=converge(u_previous,u_current,local[0],local[1]); //converge from 1 1 to local[0] local[1]
           MPI_Allreduce(&converged,&global_converged,1,MPI_INT,MPI_PROD,MPI_COMM_WORLD);
 		}
@@ -321,30 +316,24 @@ int main(int argc, char ** argv) {
 		//************************************//
   } //for time
   MPI_Barrier(MPI_COMM_WORLD);
-  // for (i = 0; i < local[0]+2; i++) {
-  //   for (j = 0; j<local[1]+2; j++) {
-  //     printf("%lf",u_current[i][j]);
-  //   }
-  //   printf("\n");
-  // }
-    // gettimeofday(&ttf,NULL);
-    //
-    // ttotal=(ttf.tv_sec-tts.tv_sec)+(ttf.tv_usec-tts.tv_usec)*0.000001;
-    //
-    // MPI_Reduce(&ttotal,&total_time,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
-    // MPI_Reduce(&tcomp,&comp_time,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
+  gettimeofday(&ttf,NULL);
+
+  ttotal=(ttf.tv_sec-tts.tv_sec)+(ttf.tv_usec-tts.tv_usec)*0.000001;
+
+  MPI_Reduce(&ttotal,&total_time,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
+  MPI_Reduce(&tcomp,&comp_time,1,MPI_DOUBLE,MPI_MAX,0,MPI_COMM_WORLD);
 
 
 
     //----Rank 0 gathers local matrices back to the global matrix----//
 
-    // if (rank==0) {
-    //         U=allocate2d(global_padded[0],global_padded[1]);
-    // }
+  if (rank==0) {
+          U=allocate2d(global_padded[0],global_padded[1]);
+  }
 
-
+  MPI_Barrier(MPI_COMM_WORLD);
 	//*************TODO*******************//
-  //MPI_Gatherv(&u_current[1][1],1,local_block,&U[0][0],scattercounts,scatteroffset,global_block,0,CART_COMM);
+  MPI_Gatherv(&u_current[1][1],1,local_block,&U[0][0],scattercounts,scatteroffset,global_block,0,CART_COMM);
 
      //************************************//
 
@@ -354,18 +343,17 @@ int main(int argc, char ** argv) {
 
 	//----Printing results----//
 
-	//**************TODO: Change "Jacobi" to "GaussSeidelSOR" or "RedBlackSOR" for appropriate printing****************//
-    // if (rank==0) {
-    //     printf("Jacobi X %d Y %d Px %d Py %d Iter %d ComputationTime %lf TotalTime %lf midpoint %lf\n",global[0],global[1],grid[0],grid[1],t,comp_time,total_time,U[global[0]/2][global[1]/2]);
-    //
-    //     #ifdef PRINT_RESULTS
-    //     char * s=malloc(50*sizeof(char));
-    //     sprintf(s,"resJacobiMPI_%dx%d_%dx%d",global[0],global[1],grid[0],grid[1]);
-    //     fprint2d(s,U,global[0],global[1]);
-    //     free(s);
-    //     #endif
-    //
-    // }
+    if (rank==0) {
+        printf("Jacobi X %d Y %d Px %d Py %d Iter %d ComputationTime %lf TotalTime %lf midpoint %lf\n",global[0],global[1],grid[0],grid[1],t,comp_time,total_time,U[global[0]/2][global[1]/2]);
+
+        #ifdef PRINT_RESULTS
+        char * s=malloc(50*sizeof(char));
+        sprintf(s,"resJacobiMPI_%dx%d_%dx%d",global[0],global[1],grid[0],grid[1]);
+        fprint2d(s,U,global[0],global[1]);
+        free(s);
+        #endif
+
+    }
     MPI_Finalize();
     return 0;
 }
