@@ -1,13 +1,16 @@
 CC=mpicc
-CFLAGS=-O3 -lm -Wall
+CFLAGS=-O3 -Wall
 RES=-DPRINT_RESULTS
-CONV=-DTEST_CONV
+##CONV=-DTEST_CONV
 
-all: jacobi
+all: jacobi gauss
 
 jacobi: jacobi_mpi.c utils.c
-	$(CC) $(CFLAGS) $(CONV)-g jacobi_mpi.c utils.c -o jacobi
-
-
+	$(CC) $(CFLAGS) $(CONV) $(RES) jacobi_mpi.c utils.c -o jacobi -lm
+gauss: gauss_mpi.c utils.c
+	$(CC) $(CFLAGS) $(CONV) $(RES) gauss_mpi.c utils.c -o gauss -lm
 clean:
-	rm jacobi
+	rm jacobi gauss
+
+clean_res:
+	rm *.out
